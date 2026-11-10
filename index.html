@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>City Together</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #bfe6ff; }
+  body { font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #fff; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; touch-action: none; }
+  .hud { position: fixed; pointer-events: none; text-shadow: 0 1px 3px #000b; }
+  #net { top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); font-size: 12px; font-weight: 600; opacity: .9; }
+  #title { top: calc(max(10px, env(safe-area-inset-top)) + 18px); left: max(12px, env(safe-area-inset-left)); font-size: 24px; font-weight: 900; }
+  #title small { font-size: 14px; font-weight: 700; opacity: .9; }
+  #stats { top: calc(max(10px, env(safe-area-inset-top)) + 52px); left: max(12px, env(safe-area-inset-left)); display: flex; gap: 12px; font-size: 16px; font-weight: 800; }
+  #stats .m { color: #ffe26a; } #stats small { font-size: 12px; font-weight: 700; opacity: .85; }
+  #saved { top: calc(max(10px, env(safe-area-inset-top)) + 78px); left: max(12px, env(safe-area-inset-left)); font-size: 12px; opacity: 0; transition: opacity .5s; }
+  #saved.on { opacity: .85; }
+  #side { position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  #side .row { display: flex; gap: 8px; }
+  button.r { min-width: 48px; min-height: 48px; border: 0; border-radius: 14px; background: #ffffffe6; color: #24324a; font: 800 18px system-ui, sans-serif; box-shadow: 0 2px 6px #0003; cursor: pointer; touch-action: manipulation; }
+  #demand { width: 132px; padding: 8px 10px; border-radius: 12px; background: #24324acc; font-size: 11px; font-weight: 800; pointer-events: none; }
+  #demand div { display: flex; align-items: center; gap: 6px; margin: 2px 0; } #demand span { width: 42px; }
+  #demand i { flex: 1; height: 7px; border-radius: 4px; background: #ffffff33; overflow: hidden; } #demand b { display: block; height: 100%; border-radius: 4px; }
+  #event { padding: 4px 10px; border-radius: 10px; background: #ff7a59e6; font-size: 12px; font-weight: 800; pointer-events: none; }
+  #event:empty { display: none; }
+  #hint { left: 16px; right: 16px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 92px); text-align: center; font-size: 15px; font-weight: 800; transition: opacity .6s; }
+  #toast { left: 16px; right: 16px; top: 24%; text-align: center; font-size: 19px; font-weight: 900; color: #ffe26a; opacity: 0; transition: opacity .4s; }
+  #toast.on { opacity: 1; }
+  #tools { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(12px, env(safe-area-inset-bottom)); display: flex; gap: 6px; padding: 6px; border-radius: 18px; background: #24324ad9; max-width: calc(100vw - 24px); box-sizing: border-box; }
+  #tools button { width: 62px; height: 66px; border: 2px solid transparent; border-radius: 13px; background: #ffffff1a; color: #fff; font: 800 11px system-ui, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; touch-action: manipulation; padding: 0; }
+  #tools button span { font-size: 23px; line-height: 1.1; } #tools button small { color: #ffe26a; font-size: 10px; }
+  #tools button.on { border-color: #ffe26a; background: #ffffff33; transform: translateY(-3px); }
+  @media (max-width: 460px) { #tools { gap: 3px; padding: 4px; } #tools button { width: 56px; height: 62px; } #demand { width: 112px; } #title { font-size: 20px; } }
+  .panel { position: fixed; inset: 0; display: grid; place-items: center; background: #0b1a3066; }
+  .card { width: min(380px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; box-sizing: border-box; padding: 20px; border-radius: 18px; background: #fffdf7; color: #24324a; text-align: center; box-shadow: 0 10px 30px #0005; text-shadow: none; }
+  .card h2 { margin: 0 0 4px; font-size: 23px; } .card h3 { margin: 14px 0 4px; font-size: 14px; color: #d0602e; text-align: left; }
+  .card .big { font-size: 34px; font-weight: 900; margin: 4px 0; }
+  .card p { margin: 6px 0; font-size: 14px; color: #5a6478; }
+  .card ol { margin: 0; padding-left: 26px; text-align: left; font-size: 14px; } .card li span { float: right; font-variant-numeric: tabular-nums; }
+  .card table { width: 100%; font-size: 14px; border-collapse: collapse; text-align: left; } .card td { padding: 3px 0; } .card td:last-child { text-align: right; font-weight: 800; }
+  button.go { width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 14px; background: #3ccf6e; color: #06240f; font: 900 17px system-ui, sans-serif; cursor: pointer; }
+  [hidden] { display: none !important; }
+  .attract .hud, .attract #tools, .attract #side { display: none !important; }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+<script type="importmap">{ "imports": { "three": "./libs/three.module.min.js" } }</script>
+</head>
+<body>
+<div class="hud" id="net">Connecting…</div>
+<div class="hud" id="title"></div>
+<div class="hud" id="stats"></div>
+<div class="hud" id="saved">✓ Town saved</div>
+<div id="side">
+  <div class="row"><button class="r" id="rotL" title="Turn (Q)">⟲</button><button class="r" id="rotR" title="Turn (E)">⟳</button><button class="r" id="statsBtn" title="Town stats">🏆</button></div>
+  <div id="demand"><div><span>Homes</span><i><b id="dH" style="background:#7bd36b"></b></i></div><div><span>Shops</span><i><b id="dS" style="background:#5fb4ff"></b></i></div></div>
+  <div id="event"></div>
+</div>
+<div class="hud" id="hint"></div>
+<div class="hud" id="toast"></div>
+<div id="tools"></div>
+<div class="panel" id="mile" hidden><div class="card">
+  <h2 id="mileTitle"></h2><div class="big" id="milePop"></div><p id="mileSub"></p>
+  <h3>Biggest towns</h3><ol id="board"><li>Loading…</li></ol>
+  <button class="go" id="mileGo">Keep building</button>
+</div></div>
+<div class="panel" id="statsPanel" hidden><div class="card">
+  <h2 id="spTitle"></h2>
+  <table id="spTable"></table>
+  <h3>Biggest towns</h3><ol id="board2"><li>Loading…</li></ol>
+  <button class="go" id="spGo">Back to building</button>
+</div></div>
+<script type="module">
+/* ═══ CITY TOGETHER · a Multiplayer Agent starter ════════════════════════════════════════
+ * Build a little town together and watch it grow. Co-op, 1–8 players; AI mayors build beside you.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ map size, prices, growth, taxes, milestones, bots
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host, live ops
+ *   MAP ........... what each map letter means, what each tool turns a tile into, the start map
+ *   WORLD MEMORY .. how the town survives the room emptying (same code in every starter)
+ *   TOWN (HOST) ... checking builds, growing lots, daily taxes, writing the shared fields
+ *   MAYORS (HOST) . AI mayors: a street plan, zoning next to roads, parks now and then
+ *   SCENE ......... ground, river, roads, lots, houses, shops, towers, parks, trees
+ *   LIFE .......... cars on the roads, people on the pavements, pop-in and dust when lots grow
+ *   ME ............ the tool, painting tiles, my cursor, the camera
+ *   HUD ........... money, population, demand bars, milestones, stats, leaderboard
+ *   INPUT ......... mouse, touch (one finger builds, two fingers move), keyboard
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - Each player writes its OWN entity: `cur` (the tile it points at and its tool, ~8 times a
+ *     second), `n`/`c` (name, color) once and `hb` (heartbeat) once a second.
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s),
+ *     worked out every frame. Only the host writes the shared fields: `city` (the whole map,
+ *     one letter per tile), `stats` (money, day, population, jobs, best population, rev and the
+ *     next payday) and `bots` (the AI mayors' cursors). A new host adopts all three.
+ *   - Everyone else sends intents: "build" {t, cells}. The host checks the tool, the tiles and
+ *     the money, then writes the map. Your own tiles show at once (a "pending" copy) until the
+ *     host's write comes back.
+ *   - Growth and taxes are the host's: it rolls which lots grow each tick, so there is one
+ *     town, not one per screen. Paydays are timestamps in `stats`.
+ *   - The town outlives the room through WORLD MEMORY (see that section).
+ *   - Leaderboard "city-pop": the biggest population each player has seen their town reach.
+ *   - Live ops: `growth` and `taxes` multiply growth and income; running events show top right.
+ *   - ?attract plays offline with AI mayors only (the preview video is recorded from it).
+ */
+import * as THREE from "three";
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  size: 24,                // the map is size × size tiles
+  tile: 2,                 // world units per tile
+  startMoney: 1500,
+  cost: { road: 10, bridge: 30, home: 10, shop: 15, park: 30, bulldoze: 0 },
+  tickMs: 1000,            // lots may grow once a tick
+  maxGrow: 6,              // most lots that grow in one tick
+  dayMs: 10000,            // taxes come in once a day
+  baseIncome: 10,          // the town's daily grant, on top of taxes
+  growth: 1,               // live ops: multiplies how fast lots grow
+  taxes: 1,                // live ops: multiplies the daily income
+  residents: [0, 5, 14, 32], // people in a home, by level (0 = an empty lot)
+  jobs: [0, 4, 12, 28],      // jobs in a shop, by level
+  milestones: [[0, "Hamlet"], [50, "Village"], [200, "Town"], [500, "City"], [1000, "Big City"], [2000, "Metropolis"]],
+  seats: 3,                // AI mayors fill the team up to this many builders
+  botEveryMs: 700,         // ms between an AI mayor's builds
+  botReserve: 250,         // money the AI mayors leave for each person
+  board: "city-pop",
+  saveNs: "city-together", // player-save namespace for world memory
+  saveEvery: 10000,        // ms between world-memory saves
+};
+const COLORS = ["#ff5a5f", "#3fa7ff", "#ffc93c", "#5ad15a", "#b57bff", "#ff8a3d", "#ff6fb5", "#36d6c6"];
+const BOT_NAMES = ["Mayor Bea", "Mayor Ozzy", "Mayor Pim", "Mayor Lou", "Mayor Kit", "Mayor Sol"];
+const TOOLS = [
+  { id: "look", icon: "✋", name: "Move" }, { id: "road", icon: "🛣️", name: "Road" }, { id: "home", icon: "🏠", name: "Homes" },
+  { id: "shop", icon: "🏪", name: "Shops" }, { id: "park", icon: "🌳", name: "Park" }, { id: "bulldoze", icon: "💥", name: "Clear" },
+];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'city-together',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+const TEST = new URLSearchParams(location.search).has("test");
+if (ATTRACT) Object.assign(CONFIG, { seats: 3, botEveryMs: 300, tickMs: 450, maxGrow: 2 });
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true, live: { config: {}, active: [] },
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {}, onLive() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+const memo = new Map();
+/** A shared JSON field, parsed once per change (read-only: never mutate what this returns). */
+function shared(key, fallback) { const raw = S.shared[key], m = memo.get(key); if (m && m.raw === raw) return m.v; const v = parse(raw, fallback); memo.set(key, { raw, v }); return v; }
+let net = null, S = { entities: { players: {} }, shared: {} }, reconnecting = false;
+let player = null; // MP.auth client: world-memory saves and the leaderboard (null offline)
+const seenHb = new Map();
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+const isHost = () => livePlayers()[0] === net.sessionId;
+/** A live-ops tunable: the owner's live config if it has one of the right type, else CONFIG. */
+function liveCfg(k) { const v = net && net.live && net.live.config ? net.live.config[k] : undefined; return typeof v === typeof CONFIG[k] ? v : CONFIG[k]; }
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const rnd = (a, b) => a + Math.random() * (b - a), pick = (list) => list[Math.floor(Math.random() * list.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ── MAP ─────────────────────────────────────────────────────────────────────────────
+// One letter per tile, row by row (tile k = i + j × N). Never digits: they'd come back as numbers.
+//   "." grass  "t" tree  "w" water  "r" road  "q" bridge  "p" park
+//   homes: "a" empty lot, "b" "c" "d" levels 1–3     shops: "e" empty lot, "f" "g" "h" levels 1–3
+const N = CONFIG.size, T = CONFIG.tile, HALF = (N * T) / 2;
+const HOME = "abcd", SHOP = "efgh";
+const isRoad = (c) => c === "r" || c === "q";
+const lvl = (c) => (HOME.includes(c) ? HOME.indexOf(c) : SHOP.includes(c) ? SHOP.indexOf(c) : -1);
+const cellX = (i) => (i + 0.5) * T - HALF, cellZ = (j) => (j + 0.5) * T - HALF;
+const inMap = (i, j) => i >= 0 && j >= 0 && i < N && j < N;
+/** What tool `t` turns a tile holding `c` into, or null if it can't go there. */
+function result(t, c) {
+  if (t === "road") return c === "." || c === "t" || c === "a" || c === "e" ? "r" : c === "w" ? "q" : null;
+  if (t === "home") return c === "." || c === "t" || c === "e" ? "a" : null;
+  if (t === "shop") return c === "." || c === "t" || c === "a" ? "e" : null;
+  if (t === "park") return c === "." || c === "t" || c === "a" || c === "e" ? "p" : null;
+  if (t === "bulldoze") return c === "q" ? "w" : c === "." || c === "w" ? null : ".";
+  return null;
+}
+const costOf = (t, c) => (t === "road" && c === "w" ? CONFIG.cost.bridge : CONFIG.cost[t] || 0);
+/** A tile has a road on one of its eight neighbours (lots need that to grow). */
+function nearRoad(g, i, j) { for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if ((di || dj) && inMap(i + di, j + dj) && isRoad(g[i + di + (j + dj) * N])) return true; return false; }
+/** How many tiles within `r` of (i, j) hold one of the letters in `set`. */
+function countNear(g, i, j, r, set) { let n = 0; for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (inMap(i + di, j + dj) && set.includes(g[i + di + (j + dj) * N])) n++; return n; }
+/** Population and jobs on a map. */
+function census(g) {
+  let pop = 0, jobs = 0, roads = 0, parks = 0;
+  for (const c of g) { if (HOME.includes(c)) pop += CONFIG.residents[HOME.indexOf(c)]; else if (SHOP.includes(c)) jobs += CONFIG.jobs[SHOP.indexOf(c)]; else if (isRoad(c)) roads++; else if (c === "p") parks++; }
+  return { pop, jobs, roads, parks };
+}
+/** The map a new town starts with: a river, trees, and one road in from the west. */
+function startMap() {
+  const g = Array(N * N).fill("."), s = mulberry32(5);
+  for (let j = 0; j < N; j++) { const c = Math.round(N * 0.7 + Math.sin(j / 3.5) * 1.6); g[c + j * N] = g[c + 1 + j * N] = "w"; }
+  for (let k = 0; k < 90; k++) { const i = Math.floor(s() * N), j = Math.floor(s() * N); if (g[i + j * N] === "." && (Math.abs(i - 11) > 4 || Math.abs(j - 12) > 4)) g[i + j * N] = "t"; }
+  for (let i = 0; i <= 11; i++) g[i + 12 * N] = "r";
+  return g;
+}
+
+// ── WORLD MEMORY ────────────────────────────────────────────────────────────────────
+// A relay room forgets everything when its last player leaves, so the PLAYERS remember the town:
+//   1. Every CONFIG.saveEvery ms and when the page closes, each player saves a copy of the live
+//      town with its `rev` (how many tiles PEOPLE changed; AI mayors don't count, so a fresh town
+//      full of their streets never beats a saved one) to its player save (player.data, namespace
+//      CONFIG.saveNs) and to this browser (localStorage). A copy with a higher rev than the live
+//      town is never overwritten: it is kept and offered.
+//   2. The first player into an empty room becomes host and loads its copy into shared.
+//   3. A player who joins holding a copy with a HIGHER rev than the live town offers it: it
+//      writes the copy into its own entity (`wmh` header, `wm0`, `wm1`… chunks under 2048
+//      characters) and the host adopts it. The copy with more building in it wins; changes
+//      made only in the other copy are lost.
+// The game supplies worldSnapshot(), liveRev() (-1 = no town yet) and loadWorld(world, rev).
+const memory = { saved: null, ready: false, cloud: null, lastJson: "", lastSave: 0, offerRev: 0, offerN: 0 };
+const memoryKey = () => "mpa-world:" + MP_CONNECT.room + (net.offline ? ":offline" : "");
+
+/** Read my copy: this browser's and my cloud save, whichever has the higher rev. */
+async function loadMemory() {
+  let best = null;
+  try { best = JSON.parse(localStorage.getItem(memoryKey()) || "null"); } catch {}
+  if (player) {
+    try {
+      const doc = (await player.data.get(CONFIG.saveNs)).data;
+      if (doc && doc.room === MP_CONNECT.room && doc.world && (!best || doc.rev > best.rev)) best = doc;
+      memory.cloud = true;
+    } catch (e) { memory.cloud = false; console.warn("World memory: no cloud save, this browser only:", e && e.message); }
+  }
+  memory.saved = best && best.room === MP_CONNECT.room && best.world && typeof best.rev === "number" ? best : null;
+  memory.lastJson = memory.saved ? JSON.stringify(memory.saved.world) : "";
+  memory.ready = true;
+}
+
+/** Save my copy of the live town, unless it is unchanged or older than the copy I hold. */
+function rememberWorld() {
+  if (ATTRACT || !memory.ready) return;
+  const rev = liveRev();
+  if (rev < 0 || (memory.saved && rev < memory.saved.rev)) return; // mine is newer: keep it, keep offering it
+  const doc = { room: MP_CONNECT.room, rev, at: Date.now(), world: worldSnapshot() };
+  const json = JSON.stringify(doc.world);
+  if (json === memory.lastJson) return;
+  memory.lastJson = json; memory.saved = doc;
+  try { localStorage.setItem(memoryKey(), JSON.stringify(doc)); } catch {}
+  if (player && memory.cloud) {
+    player.data.set(doc, { namespace: CONFIG.saveNs })
+      .catch((e) => e && e.current ? player.data.set(doc, { namespace: CONFIG.saveNs, version: e.current.version }) : Promise.reject(e))
+      .catch((e) => { if (e && (e.status === 401 || e.status === 403)) memory.cloud = false; });
+  }
+  const tag = document.getElementById("saved");
+  if (tag) { tag.classList.add("on"); setTimeout(() => tag.classList.remove("on"), 1600); }
+}
+
+/** Once a second: offer my copy if it beats the live town (the host simply loads it). */
+function offerMemory() {
+  if (ATTRACT || !memory.ready) return;
+  const mine = memory.saved, live = liveRev(), better = mine && mine.rev > live;
+  if (isHost()) {
+    if (memory.offerRev) clearOffer();
+    if (better && live >= 0 && loadWorld(mine.world, mine.rev)) memoryAdopted("");
+    return;
+  }
+  if (better && memory.offerRev !== mine.rev) {
+    const json = JSON.stringify(mine.world), fields = {}, n = Math.ceil(json.length / 1900);
+    if (n > 40) return; // too big for my entity: keep it for when I am host
+    for (let i = 0; i < n; i++) fields["wm" + i] = "~" + json.slice(i * 1900, (i + 1) * 1900); // "~" keeps it a string
+    net.me.set(fields);
+    net.me.set("wmh", JSON.stringify({ room: MP_CONNECT.room, rev: mine.rev, n })); // header last: chunks land first
+    memory.offerRev = mine.rev; memory.offerN = n;
+  } else if (!better && memory.offerRev) clearOffer();
+}
+function clearOffer() {
+  const fields = { wmh: "" };
+  for (let i = 0; i < memory.offerN; i++) fields["wm" + i] = "";
+  net.me.set(fields); memory.offerRev = 0; memory.offerN = 0;
+}
+
+/** Host, once a second: adopt the best complete offer that beats the live town. */
+function adoptOffers() {
+  let best = null;
+  for (const id of livePlayers()) {
+    const p = S.entities.players[id], h = id !== net.sessionId && parse(p && p.wmh, null);
+    if (!h || h.room !== MP_CONNECT.room || !(h.n <= 40) || !(h.rev > liveRev()) || (best && h.rev <= best.rev)) continue;
+    let json = "";
+    for (let i = 0; i < h.n && json !== null; i++) { const c = p["wm" + i]; json = typeof c === "string" && c[0] === "~" ? json + c.slice(1) : null; }
+    const world = parse(json, null);
+    if (world) best = { rev: h.rev, world, name: p.n || "A player" };
+  }
+  if (best && loadWorld(best.world, best.rev)) memoryAdopted(best.name);
+}
+function memoryAdopted(name) {
+  const text = name ? `${name} brought back the town they saved` : "Welcome back: your saved town is loaded";
+  toast(text); net.send("memory", { text: name ? text : "The host brought back the town they saved" });
+}
+function memoryTick() {
+  offerMemory();
+  if (isHost() && !ATTRACT) adoptOffers();
+  if (performance.now() - memory.lastSave > CONFIG.saveEvery) { memory.lastSave = performance.now(); rememberWorld(); }
+}
+addEventListener("pagehide", () => rememberWorld());
+document.addEventListener("visibilitychange", () => { if (document.hidden) rememberWorld(); });
+
+// ── TOWN (HOST) ─────────────────────────────────────────────────────────────────────
+// world.g is the map as an array of letters; world.pop/jobs/roads/parks come from census(). `city` = "~" + the letters; `stats` = { m: money,
+// d: day, p: population, j: jobs, b: best population, rev, at: next payday, inc: last day's income }.
+const world = { g: null, m: 0, d: 1, b: 0, rev: 0, at: 0, inc: 0, adopted: false, dirtyG: false, dirtyS: false, lastG: 0, lastS: 0, growAt: 0, bots: new Map(), lastBots: 0, botsJson: "" };
+const hosting = () => isHost() && world.adopted;
+/** The map as everyone sees it: the host's live array, or the last `city` it wrote. */
+const cityMemo = { raw: undefined, g: null };
+function cityGrid() {
+  if (hosting()) return world.g;
+  const raw = S.shared.city;
+  if (raw !== cityMemo.raw) { cityMemo.raw = raw; cityMemo.g = typeof raw === "string" && raw[0] === "~" && raw.length === N * N + 1 ? raw.slice(1).split("") : null; }
+  return cityMemo.g;
+}
+const stats = () => (hosting() ? { m: world.m, d: world.d, p: world.pop, j: world.jobs, b: world.b, rev: world.rev, at: world.at, inc: world.inc } : shared("stats", null));
+let startedAt = 0;
+
+/** Become host: take the town exactly as state has it. */
+function adoptWorld() {
+  const g = cityGrid(), st = shared("stats", {});
+  world.g = [...g]; Object.assign(world, { m: st.m ?? CONFIG.startMoney, d: st.d ?? 1, b: st.b ?? 0, rev: st.rev ?? 0, at: st.at || Date.now() + CONFIG.dayMs, inc: st.inc ?? 0, adopted: true });
+  Object.assign(world, census(world.g));
+  world.bots.clear();
+  for (const b of shared("bots", [])) world.bots.set(b.i, { id: b.i, name: b.n, color: b.c, x: b.x, z: b.z, t: b.t, target: null, nextAt: 0 });
+}
+/** World memory: install a saved town (checked letter by letter). */
+function loadWorld(snap, rev) {
+  if (!snap || typeof snap.g !== "string" || snap.g.length !== N * N || typeof rev !== "number" || /[^.twrqpa-h]/.test(snap.g)) return false;
+  world.g = snap.g.split(""); Object.assign(world, { m: Number(snap.m) || CONFIG.startMoney, d: Number(snap.d) || 1, b: Number(snap.b) || 0, rev, at: Date.now() + CONFIG.dayMs, adopted: true, dirtyG: true, dirtyS: true });
+  Object.assign(world, census(world.g)); world.b = Math.max(world.b, world.pop);
+  for (const b of world.bots.values()) b.target = null;
+  return true;
+}
+function worldSnapshot() { const g = cityGrid(), st = stats() || {}; return g ? { g: g.join(""), m: st.m, d: st.d, b: st.b } : null; }
+function liveRev() { return hosting() ? world.rev : typeof shared("stats", null)?.rev === "number" ? shared("stats", null).rev : -1; }
+function newTown() {
+  world.g = startMap(); Object.assign(world, { m: CONFIG.startMoney, d: 1, b: 0, rev: 0, at: Date.now() + CONFIG.dayMs, inc: 0, adopted: true, dirtyG: true, dirtyS: true });
+  if (ATTRACT) attractTown();
+  Object.assign(world, census(world.g));
+}
+
+/** A "build" intent (or an AI mayor's build). Paints up to 60 tiles while the money lasts. */
+function applyBuild(from, m, human) {
+  if (!m || !TOOLS.some((t) => t.id === m.t && t.id !== "look") || !Array.isArray(m.cells)) return 0;
+  let done = 0;
+  for (const cell of m.cells.slice(0, 60)) {
+    const [i, j] = Array.isArray(cell) ? cell : [];
+    if (!Number.isInteger(i) || !Number.isInteger(j) || !inMap(i, j)) continue;
+    const k = i + j * N, c = world.g[k], to = result(m.t, c), cost = to ? costOf(m.t, c) : 0;
+    if (!to || to === c) continue;
+    if (world.m < cost && !ATTRACT) break;
+    world.m -= ATTRACT ? 0 : cost; world.g[k] = to; done++;
+  }
+  if (done) { world.dirtyG = world.dirtyS = true; if (human) world.rev += done; Object.assign(world, census(world.g)); }
+  return done;
+}
+/** One growth tick: lots next to a road fill up. Homes want shops (and love parks); shops want people. */
+function growTick() {
+  const g = world.g, { pop, jobs } = census(g), homeWant = clamp(0.5 + ((jobs + 25) / (pop * 0.45 + 25)) * 0.5, 0.3, 1.6), shopWant = clamp((pop * 0.45 + 15) / (jobs + 15) - 0.3, 0.1, 1.6);
+  world.want = [homeWant, shopWant];
+  let grown = 0;
+  const start = Math.floor(Math.random() * g.length);
+  for (let n = 0; n < g.length && grown < CONFIG.maxGrow; n++) {
+    const k = (start + n * 7) % g.length, c = g[k], h = HOME.indexOf(c), s = SHOP.indexOf(c);
+    if ((h < 0 || h > 2) && (s < 0 || s > 2)) continue;
+    const i = k % N, j = Math.floor(k / N);
+    if (!nearRoad(g, i, j)) continue;
+    let p;
+    if (h >= 0) {
+      const parks = countNear(g, i, j, 3, "p"), shops = countNear(g, i, j, 4, "fgh");
+      p = 0.065 * homeWant * (1 + Math.min(2, parks) * 0.5);
+      if (h >= 1 && !shops) p *= 0.25; // bigger homes need shops nearby
+      if (h >= 2 && !parks) p *= 0.4;  // and the biggest want a park
+    } else p = 0.055 * shopWant * (countNear(g, i, j, 4, "bcd") ? 1 : 0.15); // shops need people nearby
+    if (Math.random() < p * liveCfg("growth")) { g[k] = (h >= 0 ? HOME : SHOP)[(h >= 0 ? h : s) + 1]; grown++; }
+  }
+  if (grown) { world.dirtyG = world.dirtyS = true; Object.assign(world, census(g)); if (world.pop > world.b) world.b = world.pop; }
+}
+function hostTick(dt, now) {
+  if (!world.adopted) {
+    if (cityGrid()) adoptWorld();
+    else if (memory.ready || now - startedAt > 3000) { if (memory.saved && loadWorld(memory.saved.world, memory.saved.rev)) memoryAdopted(""); else newTown(); }
+    else return; // first one here: wait a moment for my saved town
+  }
+  if (now > world.growAt) { world.growAt = now + CONFIG.tickMs; growTick(); }
+  if (Date.now() >= world.at) { // payday (a new host catches up on missed days)
+    const { pop, jobs, roads, parks } = census(world.g);
+    world.inc = Math.round((CONFIG.baseIncome + pop * 0.6 + jobs * 0.8 - roads * 0.15 - parks * 0.8) * liveCfg("taxes"));
+    world.m = Math.max(0, world.m + world.inc); world.d++; world.at = Math.max(world.at + CONFIG.dayMs, Date.now() + 1000); world.dirtyS = true;
+  }
+  mayorsTick(dt, now);
+  if (world.dirtyG && now - world.lastG > 250) { world.dirtyG = false; world.lastG = now; net.setShared("city", "~" + world.g.join("")); }
+  if (world.dirtyS && !world.dirtyG && now - world.lastS > 250) { world.dirtyS = false; world.lastS = now; net.setShared("stats", JSON.stringify(stats())); }
+}
+
+// ── MAYORS (HOST) ───────────────────────────────────────────────────────────────────
+// AI mayors follow one street plan: avenues and streets on a grid, homes and shops on the tiles
+// beside them, a park now and then. They build outward from the middle, only on empty land, and
+// only roads that join a road already built, so the town grows like a real one.
+const PLAN = (() => {
+  const rows = [5, 12, 18], cols = [4, 11, 20], s = mulberry32(8), out = [], isPlanRoad = (i, j) => rows.includes(j) || cols.includes(i);
+  for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+    const d = Math.hypot(i - 11, j - 12) + s() * 2.5;
+    if (isPlanRoad(i, j)) { out.push({ k: i + j * N, t: "road", d }); continue; }
+    let next = false; for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (isPlanRoad(i + di, j + dj)) next = true;
+    if (!next) continue;
+    const t = (i * 7 + j * 13) % 19 === 0 ? "park" : Math.hypot(i - 11, j - 12) < 5 ? (s() < 0.55 ? "shop" : "home") : s() < 0.2 ? "shop" : "home";
+    out.push({ k: i + j * N, t, d: d + 1.2 });
+  }
+  return out.sort((a, b) => a.d - b.d);
+})();
+function mayorList() {
+  if (hosting()) return [...world.bots.values()].map((b) => ({ i: b.id, n: b.name, c: b.color, x: b.x, z: b.z, t: b.t }));
+  return shared("bots", []);
+}
+/** The next plan item an AI mayor can build: empty land, joined to a road, not someone else's target. */
+function nextPlanItem(b) {
+  const g = world.g, people = livePlayers().filter((id) => !(ATTRACT && id === net.sessionId)).length, taken = new Set([...world.bots.values()].filter((o) => o !== b && o.target).map((o) => o.target.k));
+  for (const item of PLAN) {
+    const c = g[item.k], i = item.k % N, j = Math.floor(item.k / N);
+    if (taken.has(item.k) || !(c === "." || c === "t" || (item.t === "road" && c === "w"))) continue;
+    if (!ATTRACT && world.m < costOf(item.t, c) + CONFIG.botReserve * people) return null; // leave money for people
+    const joined = item.t === "road" ? [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => inMap(i + di, j + dj) && isRoad(g[i + di + (j + dj) * N])) : nearRoad(g, i, j);
+    if (joined) return item;
+  }
+  return null;
+}
+function mayorsTick(dt, now) {
+  const humans = livePlayers().filter((id) => !(ATTRACT && id === net.sessionId)).length, want = Math.max(0, CONFIG.seats - humans);
+  while (world.bots.size > want) world.bots.delete([...world.bots.keys()].pop());
+  while (world.bots.size < want) {
+    const used = new Set([...world.bots.values()].map((b) => b.name)), colors = new Set([...takenColors(), ...[...world.bots.values()].map((b) => b.color)]), id = "b" + Math.random().toString(36).slice(2, 6);
+    world.bots.set(id, { id, name: BOT_NAMES.find((n) => !used.has(n)) || "Mayor", color: COLORS.find((c) => !colors.has(c)) || pick(COLORS), x: rnd(-6, 6), z: rnd(-6, 6), t: "road", target: null, nextAt: now + rnd(500, 1500) });
+  }
+  for (const b of world.bots.values()) {
+    if (takenColors().has(b.color)) { const used = new Set([...takenColors(), ...[...world.bots.values()].map((o) => o.color)]); b.color = COLORS.find((c) => !used.has(c)) || b.color; } // people keep their color
+    if (!b.target && now > b.nextAt) { b.target = nextPlanItem(b); b.nextAt = now + CONFIG.botEveryMs * rnd(0.6, 1.4); if (!b.target) b.nextAt = now + 3000; else b.t = b.target.t; }
+    const tx = b.target ? cellX(b.target.k % N) : b.x, tz = b.target ? cellZ(Math.floor(b.target.k / N)) : b.z, d = Math.hypot(tx - b.x, tz - b.z), step = (ATTRACT ? 26 : 14) * dt;
+    if (d > step) { b.x += ((tx - b.x) / d) * step; b.z += ((tz - b.z) / d) * step; }
+    else if (b.target && now > b.nextAt) { b.x = tx; b.z = tz; applyBuild(b.id, { t: b.target.t, cells: [[b.target.k % N, Math.floor(b.target.k / N)]] }, false); b.target = null; b.nextAt = now + CONFIG.botEveryMs * rnd(0.6, 1.4); }
+  }
+  if (now - world.lastBots > 125) {
+    world.lastBots = now;
+    const json = JSON.stringify(mayorList().map((b) => ({ ...b, x: +b.x.toFixed(2), z: +b.z.toFixed(2) })));
+    if (json !== world.botsJson) { world.botsJson = json; net.setShared("bots", json); }
+  }
+}
+/** ?attract: start from a town that is already half built, so the preview is busy from the first frame. */
+function attractTown() {
+  const s = mulberry32(3);
+  for (let n = 0; n < 200; n++) {
+    const item = nextPlanItemStatic(); if (!item) break;
+    const level = s() < 0.25 ? 0 : s() < 0.75 ? 1 : 2; // mostly small houses and shops, a few empty lots left to fill
+    world.g[item.k] = item.t === "road" ? (world.g[item.k] === "w" ? "q" : "r") : item.t === "park" ? "p" : (item.t === "home" ? HOME : SHOP)[level];
+  }
+  for (const item of PLAN.slice(0, 22)) if (item.t !== "road" && item.t !== "park" && world.g[item.k] !== ".") world.g[item.k] = item.t === "home" ? "d" : "h"; // a few tall ones in the middle
+}
+function nextPlanItemStatic() {
+  const g = world.g;
+  return PLAN.find((item) => { const c = g[item.k], i = item.k % N, j = Math.floor(item.k / N); if (!(c === "." || c === "t" || (item.t === "road" && c === "w"))) return false; return item.t === "road" ? [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => inMap(i + di, j + dj) && isRoad(g[i + di + (j + dj) * N])) : nearRoad(g, i, j); });
+}
+
+// ── SCENE ───────────────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#bfe6ff");
+scene.fog = new THREE.Fog("#bfe6ff", 70, 170);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 600);
+function fit() { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+addEventListener("resize", fit); addEventListener("orientationchange", fit); fit();
+function canvasTex(w, h, paint, rx, ry) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h; paint(c.getContext("2d"), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  if (rx) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); }
+  return t;
+}
+const mat = (color, more) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...more });
+const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), SC = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0), COL = new THREE.Color();
+scene.add(new THREE.HemisphereLight("#ffffff", "#7aa36a", 1.5));
+const sun = new THREE.DirectionalLight("#fff4de", 2.1);
+sun.position.set(30, 50, 20); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 140 });
+scene.add(sun);
+const grassTex = canvasTex(64, 64, (c, w, h) => { c.fillStyle = "#8fd06a"; c.fillRect(0, 0, w, h); for (let i = 0; i < 300; i++) { c.fillStyle = Math.random() < 0.5 ? "#84c560" : "#9bd875"; c.fillRect(Math.random() * w, Math.random() * h, 3, 3); } }, 60, 60);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), mat("#ffffff", { map: grassTex })); ground.receiveShadow = true; scene.add(ground);
+const board = new THREE.Mesh(new THREE.BoxGeometry(N * T + 1, 0.6, N * T + 1), mat("#c9b48a")); board.position.y = -0.31; scene.add(board); // the town's edge, a little earthy rim
+const gridLines = new THREE.GridHelper(N * T, N, "#ffffff", "#ffffff"); gridLines.position.y = 0.03; gridLines.material.transparent = true; gridLines.material.opacity = 0.18; scene.add(gridLines);
+// Hills and trees around the map, so it sits in a landscape.
+const outer = [], s0 = mulberry32(2);
+for (let k = 0; k < 110; k++) { const a = s0() * Math.PI * 2, r = HALF + 6 + s0() * 40; outer.push([Math.cos(a) * r, Math.sin(a) * r, 0.8 + s0() * 0.8]); }
+const outerTrees = new THREE.InstancedMesh(new THREE.ConeGeometry(1.2, 3, 7), mat("#3f9a4c", { flatShading: true }), outer.length);
+outer.forEach(([x, z, s], k) => outerTrees.setMatrixAt(k, M4.compose(V.set(x, 1.5 * s, z), Q.identity(), SC.set(s, s, s))));
+outerTrees.castShadow = true; scene.add(outerTrees);
+
+// Tiles: one InstancedMesh per kind of thing, refilled whenever the map changes.
+const winTex = (wall, glass, rows, cols) => canvasTex(64, 128, (c, w, h) => { c.fillStyle = wall; c.fillRect(0, 0, w, h); c.fillStyle = glass; for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) c.fillRect(6 + x * ((w - 12) / cols) + 2, 8 + y * ((h - 16) / rows) + 2, (w - 12) / cols - 5, (h - 16) / rows - 6); });
+function kind(geo, material, max, shadow = true) {
+  const m = new THREE.InstancedMesh(geo, material, max); m.count = 0; m.castShadow = shadow; m.receiveShadow = true; m.frustumCulled = false;
+  m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(max * 3).fill(1), 3); // white unless a tile sets a color
+  scene.add(m); return m;
+}
+const MAXT = N * N;
+const K = {
+  road: kind(new THREE.BoxGeometry(T, 0.08, T), mat("#5a606c", { roughness: 0.95 }), MAXT, false),
+  dash: kind(new THREE.BoxGeometry(0.16, 0.02, 0.62), new THREE.MeshBasicMaterial({ color: "#ffe066" }), MAXT * 4, false),
+  bridge: kind(new THREE.BoxGeometry(0.14, 0.4, T), mat("#d9d2c2"), MAXT * 2),
+  water: kind(new THREE.BoxGeometry(T, 0.1, T), mat("#5bb6ea", { roughness: 0.15, metalness: 0.1 }), MAXT, false),
+  lot: kind(new THREE.BoxGeometry(T * 0.94, 0.06, T * 0.94), mat("#ffffff"), MAXT, false),
+  park: kind(new THREE.BoxGeometry(T * 0.96, 0.1, T * 0.96), mat("#6cc455"), MAXT, false),
+  crown: kind(new THREE.IcosahedronGeometry(0.55, 0), mat("#ffffff", { flatShading: true }), MAXT * 3),
+  trunk: kind(new THREE.CylinderGeometry(0.08, 0.11, 0.6, 5), mat("#7a5230"), MAXT * 3),
+  house: kind(new THREE.BoxGeometry(1, 1, 1), mat("#ffffff"), MAXT),
+  roof: kind(new THREE.ConeGeometry(0.8, 0.6, 4).rotateY(Math.PI / 4), mat("#ffffff"), MAXT),
+  flats: kind(new THREE.BoxGeometry(1.5, 3.4, 1.5), mat("#ffffff", { map: winTex("#ffffff", "#5d7290", 7, 3) }), MAXT),
+  store: kind(new THREE.BoxGeometry(1.6, 1, 1.6), mat("#ffffff", { map: winTex("#ffffff", "#9fd4ff", 1, 2) }), MAXT),
+  awning: kind(new THREE.BoxGeometry(1.66, 0.14, 0.5), mat("#ffffff"), MAXT),
+  tower: kind(new THREE.BoxGeometry(1.4, 5, 1.4), mat("#ffffff", { map: winTex("#dfe9f5", "#3f7fbf", 12, 3), roughness: 0.4, metalness: 0.2 }), MAXT),
+  cap: kind(new THREE.BoxGeometry(1.6, 0.18, 1.6), mat("#8a93a3"), MAXT),
+};
+const HOUSE_COLORS = ["#f6d186", "#f4978e", "#a8d5ba", "#8ecae6", "#ffd6a5", "#c9b6e4", "#ffadad", "#e9c46a"], ROOF_COLORS = ["#c0504d", "#7a5cff", "#3f7fd0", "#8a5a3a", "#2fb7a0"];
+const SHOP_COLORS = ["#ff7a59", "#3fa7ff", "#ffc93c", "#5ad15a", "#ff6fb5", "#b57bff"];
+const hash = (k) => { let h = k * 2654435761; h ^= h >>> 13; return (h >>> 0) % 997; };
+const view = { raw: "", g: null, since: new Map(), cells: [] }; // since: tile -> when it last changed (grow-in pop)
+const pending = new Map(); // tile -> { c (what I painted), until }
+/** What I see: the town from state plus my own tiles that the host hasn't written back yet. */
+function viewGrid(now) {
+  const g = cityGrid(); if (!g) return null;
+  for (const [k, p] of pending) if (g[k] === p.c || now > p.until) pending.delete(k);
+  if (!pending.size) return g;
+  const out = [...g]; for (const [k, p] of pending) out[k] = p.c; return out;
+}
+function syncTiles(now) {
+  const g = viewGrid(now); if (!g) return;
+  const raw = g.join("");
+  if (raw === view.raw) return;
+  if (view.g) for (let k = 0; k < g.length; k++) if (g[k] !== view.g[k]) { view.since.set(k, now); if (lvl(g[k]) > 0 || g[k] === "p" || isRoad(g[k])) dust(k, g[k]); }
+  view.raw = raw; view.g = g;
+  rebuildTiles(now);
+}
+function rebuildTiles(now) {
+  const g = view.g, n = Object.fromEntries(Object.keys(K).map((k) => [k, 0]));
+  const put = (m, x, y, z, sx, sy, sz, color, ry = 0) => { const i = n[m]++; K[m].setMatrixAt(i, M4.compose(V.set(x, y, z), Q.setFromAxisAngle(UP, ry), SC.set(sx, sy, sz))); if (color) K[m].setColorAt(i, COL.set(color)); };
+  for (let k = 0; k < g.length; k++) {
+    const c = g[k], i = k % N, j = Math.floor(k / N), x = cellX(i), z = cellZ(j), h = hash(k), grow = growScale(k, now);
+    if (c === "w" || c === "q") put("water", x, -0.02, z, 1, 1, 1);
+    if (isRoad(c)) {
+      put("road", x, c === "q" ? 0.18 : 0.04, z, 1, 1, 1);
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inMap(i + di, j + dj) && isRoad(g[i + di + (j + dj) * N])) put("dash", x + di * 0.55, c === "q" ? 0.23 : 0.09, z + dj * 0.55, 1, 1, 1, null, di ? Math.PI / 2 : 0);
+      if (c === "q") { const along = isRoad(g[k - 1]) || isRoad(g[k + 1]); for (const s of [-1, 1]) put("bridge", x + (along ? 0 : s * 0.9), 0.3, z + (along ? s * 0.9 : 0), 1, 1, 1, null, along ? Math.PI / 2 : 0); }
+    }
+    if (c === "t") treeAt(put, x, z, h, 1);
+    if (c === "p") { put("park", x, 0.05, z, 1, 1, 1); treeAt(put, x - 0.45, z - 0.4, h, grow); treeAt(put, x + 0.5, z + 0.35, h + 5, grow * 0.8); }
+    const l = lvl(c);
+    if (l >= 0) put("lot", x, 0.03, z, 1, 1, 1, HOME.includes(c) ? (l ? "#d9e8c4" : "#bfe39b") : (l ? "#d7e4ef" : "#a9d4f7"));
+    if (HOME.includes(c) && l > 0) {
+      const ry = (h % 4) * (Math.PI / 2);
+      if (l < 3) { const w = l === 1 ? 1.05 : 1.45, ht = l === 1 ? 0.8 : 1.3; put("house", x, ht / 2 * grow + 0.05, z, w, ht * grow, w, HOUSE_COLORS[h % HOUSE_COLORS.length], ry); put("roof", x, (ht + 0.3) * grow + 0.05, z, w * 0.95, grow * (l === 1 ? 1 : 1.2), w * 0.95, ROOF_COLORS[h % ROOF_COLORS.length], ry); }
+      else { put("flats", x, 1.7 * grow + 0.05, z, 1, grow, 1, HOUSE_COLORS[(h + 3) % HOUSE_COLORS.length], ry); put("cap", x, 3.45 * grow + 0.05, z, 1, 1, 1, "#7d8696"); }
+    }
+    if (SHOP.includes(c) && l > 0) {
+      const color = SHOP_COLORS[h % SHOP_COLORS.length];
+      if (l < 3) { const ht = l === 1 ? 0.9 : 1.6; put("store", x, ht / 2 * grow + 0.05, z, 1, (ht / 1) * grow, 1, l === 1 ? "#fff6e8" : "#f2f4f8"); put("awning", x, (ht * 0.62) * grow + 0.05, z + 0.82, 1, 1, 1, color); put("cap", x, ht * grow + 0.1, z, 1, 1, 1, color); }
+      else { put("tower", x, 2.5 * grow + 0.05, z, 1, grow, 1, h % 2 ? "#e8f2ff" : "#d8f5ec"); put("cap", x, 5 * grow + 0.1, z, 0.9, 1, 0.9, "#6b7484"); }
+    }
+  }
+  for (const [m, count] of Object.entries(n)) { K[m].count = count; K[m].instanceMatrix.needsUpdate = true; K[m].instanceColor.needsUpdate = true; }
+  for (const [k, t0] of view.since) if (now - t0 > 500) view.since.delete(k);
+  view.animating = view.since.size > 0;
+}
+const TREE_GREENS = ["#4caf50", "#5cbf60", "#3e9e4a", "#7cc35a"];
+function treeAt(put, x, z, h, s) { put("trunk", x, 0.3 * s, z, s, s, s); put("crown", x, 0.85 * s, z, s, s * 1.2, s, TREE_GREENS[h % 4]); }
+const easeOutBack = (t) => 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;
+function growScale(k, now) { const t0 = view.since.get(k); if (t0 === undefined) return 1; const t = (now - t0) / 450; return t >= 1 ? 1 : Math.max(0.05, easeOutBack(Math.max(0, t))); }
+
+// ── LIFE ────────────────────────────────────────────────────────────────────────────
+// Cars drive the roads and people walk the pavements: just for life, each screen runs its own.
+const carGeo = new THREE.BoxGeometry(0.42, 0.26, 0.78), cars = [], walkers = [];
+const carMesh = kind(carGeo, mat("#ffffff", { roughness: 0.5 }), 90);
+const cabMesh = kind(new THREE.BoxGeometry(0.36, 0.18, 0.4), mat("#2b3a55"), 90, false);
+const walkMesh = kind(new THREE.CapsuleGeometry(0.07, 0.16, 2, 6), mat("#ffffff"), 120, false);
+const CAR_COLORS = ["#ff5a5f", "#3fa7ff", "#ffc93c", "#ffffff", "#5ad15a", "#b57bff", "#2b2b2b"];
+function roadNeighbors(g, i, j) { return [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([di, dj]) => inMap(i + di, j + dj) && isRoad(g[i + di + (j + dj) * N])); }
+function spawnMover(list, g, speed, color) {
+  const roads = []; for (let k = 0; k < g.length; k++) if (isRoad(g[k]) && roadNeighbors(g, k % N, Math.floor(k / N)).length) roads.push(k);
+  if (!roads.length) return;
+  const k = pick(roads), i = k % N, j = Math.floor(k / N), [di, dj] = pick(roadNeighbors(g, i, j));
+  list.push({ i, j, di, dj, t: Math.random(), speed: speed * rnd(0.8, 1.2), color });
+}
+/** Move from tile centre to tile centre along the roads; at each centre pick a way on (straight on most often, back only at a dead end). */
+function stepMover(m, g, dt) {
+  m.t += m.speed * dt;
+  while (m.t >= 1) {
+    m.t -= 1; m.i += m.di; m.j += m.dj;
+    if (!inMap(m.i, m.j) || !isRoad(g[m.i + m.j * N])) return false;
+    const ways = roadNeighbors(g, m.i, m.j).filter(([di, dj]) => di !== -m.di || dj !== -m.dj);
+    const way = ways.length ? (ways.find(([di, dj]) => di === m.di && dj === m.dj && Math.random() < 0.6) || pick(ways)) : [-m.di, -m.dj];
+    [m.di, m.dj] = way;
+  }
+  return true;
+}
+function lifeTick(dt, t) {
+  const g = view.g; if (!g) return;
+  const { pop, roads } = census(g), wantCars = Math.min(90, Math.floor(pop / 7 + roads / 10)), wantWalkers = Math.min(120, Math.floor(pop / 4));
+  while (cars.length < wantCars) { const n = cars.length; spawnMover(cars, g, 1.6, CAR_COLORS[n % CAR_COLORS.length]); if (cars.length === n) break; }
+  while (walkers.length < wantWalkers) { const n = walkers.length; spawnMover(walkers, g, 0.35, HOUSE_COLORS[n % HOUSE_COLORS.length]); if (walkers.length === n) break; }
+  cars.length = Math.min(cars.length, wantCars + 5); walkers.length = Math.min(walkers.length, wantWalkers + 5);
+  const draw = (list, mesh, lane, y, extra) => {
+    let n = 0;
+    for (let k = list.length - 1; k >= 0; k--) {
+      const m = list[k];
+      if (!stepMover(m, g, dt)) { list.splice(k, 1); continue; }
+      const bridge = g[m.i + m.j * N] === "q" ? 0.14 : 0;
+      const x = cellX(m.i) + m.di * m.t * T - m.dj * lane, z = cellZ(m.j) + m.dj * m.t * T + m.di * lane, ry = Math.atan2(m.di, m.dj);
+      mesh.setMatrixAt(n, M4.compose(V.set(x, y + bridge + (extra ? Math.abs(Math.sin(t * 9 + k)) * 0.03 : 0), z), Q.setFromAxisAngle(UP, ry), SC.set(1, 1, 1))); mesh.setColorAt(n, COL.set(m.color));
+      if (extra) extra(n, x, y + bridge, z, ry);
+      n++;
+    }
+    mesh.count = n; mesh.instanceMatrix.needsUpdate = true; if (n) mesh.instanceColor.needsUpdate = true;
+  };
+  draw(cars, carMesh, 0.36, 0.22, (n, x, y, z, ry) => cabMesh.setMatrixAt(n, M4.compose(V.set(x, y + 0.2, z - 0.02), Q.setFromAxisAngle(UP, ry), SC.set(1, 1, 1))));
+  cabMesh.count = carMesh.count; cabMesh.instanceMatrix.needsUpdate = true;
+  draw(walkers, walkMesh, 0.84, 0.2, null);
+}
+// Dust and sparkles when a lot grows; confetti for milestones.
+const PMAX = 300, parts = [];
+const partMesh = kind(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: "#ffffff" }), PMAX, false);
+partMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(PMAX * 3), 3);
+function dust(k, c) { const x = cellX(k % N), z = cellZ(Math.floor(k / N)), col = lvl(c) > 0 ? (HOME.includes(c) ? "#fff2c4" : "#cfe8ff") : c === "p" ? "#b8f0a0" : "#e0e0e0"; burst(x, 0.6, z, lvl(c) >= 2 ? 10 : 6, col, 1.4, 3); }
+function burst(x, y, z, n, color, speed = 2, up = 4) { const c = new THREE.Color(color); for (let i = 0; i < n && parts.length < PMAX; i++) parts.push({ x, y, z, vx: rnd(-speed, speed), vy: rnd(up * 0.4, up), vz: rnd(-speed, speed), life: rnd(0.5, 1), c }); }
+function partsTick(dt) {
+  let i = 0;
+  for (let n = parts.length - 1; n >= 0; n--) {
+    const p = parts[n]; p.life -= dt; p.vy -= 9 * dt; p.x += p.vx * dt; p.y = Math.max(0.05, p.y + p.vy * dt); p.z += p.vz * dt;
+    if (p.life <= 0) { parts.splice(n, 1); continue; }
+    partMesh.setMatrixAt(i, M4.compose(V.set(p.x, p.y, p.z), Q.identity(), SC.setScalar(p.life + 0.2))); partMesh.setColorAt(i++, p.c);
+  }
+  partMesh.count = i; partMesh.instanceMatrix.needsUpdate = true; if (i) partMesh.instanceColor.needsUpdate = true;
+}
+
+// ── ME ──────────────────────────────────────────────────────────────────────────────
+const myName = (() => { try { return localStorage.getItem("mpa-name") || ""; } catch { return ""; } })() || pick(["Busy", "Sunny", "Clever", "Happy", "Cosy", "Lucky"]) + " " + pick(["Mayor", "Planner", "Builder", "Architect"]);
+let myColor = COLORS[0];
+const me = { tool: "road", cell: null, lastSend: 0, sent: "", stroke: null, queue: [], lastFlush: 0 };
+const cam = { x: -3, z: 1, dist: 36, yaw: 0.7, pitch: 0.95 };
+const takenColors = () => new Set(Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId && livePlayers().includes(id)).map(([, p]) => p.c).concat(net ? [myColor] : []));
+/** Paint the tile under the pointer (and every tile on the way from the last one, so fast drags leave no gaps). */
+function paintTo(cell) {
+  const s = me.stroke; if (!s || !cell) return;
+  const [i1, j1] = cell, [i0, j0] = s.last || cell, steps = Math.max(Math.abs(i1 - i0), Math.abs(j1 - j0));
+  for (let n = 0; n <= steps; n++) {
+    const i = Math.round(i0 + ((i1 - i0) * n) / (steps || 1)), j = Math.round(j0 + ((j1 - j0) * n) / (steps || 1)), k = i + j * N;
+    if (!inMap(i, j) || s.done.has(k)) continue;
+    s.done.add(k);
+    const c = (viewGrid(performance.now()) || [])[k], to = result(me.tool, c), cost = to ? costOf(me.tool, c) : 0;
+    if (!to || to === c) continue;
+    const money = (stats()?.m ?? 0) - s.spent;
+    if (money < cost) { if (!s.broke) toast("Not enough money: wait for payday, or grow the town"); s.broke = true; continue; }
+    s.spent += cost; pending.set(k, { c: to, until: performance.now() + 2500 }); me.queue.push([i, j]);
+    sfx(me.tool === "bulldoze" ? 160 : 520 + (me.queue.length % 5) * 40, 0.06, me.tool === "bulldoze" ? "sawtooth" : "triangle");
+  }
+  s.last = cell;
+}
+/** Send the painted tiles to the host (or apply them, if I am the host). */
+function flush(now, force) {
+  if (!me.queue.length || (!force && now - me.lastFlush < 150)) return;
+  me.lastFlush = now;
+  while (me.queue.length) {
+    const cells = me.queue.splice(0, 50), m = { t: me.stroke?.tool || me.tool, cells };
+    if (isHost()) applyBuild(net.sessionId, m, true); else net.send("build", m);
+  }
+}
+function publishCursor(now) {
+  if (now - me.lastSend < 120) return;
+  const json = JSON.stringify(me.cell ? { x: me.cell[0], z: me.cell[1], t: me.tool } : { t: me.tool });
+  if (json === me.sent && now - me.lastSend < 1500) return;
+  me.lastSend = now; me.sent = json; net.me.set("cur", json);
+}
+/** Two people joined at once in one color: the one with the higher sessionId picks a free one (mayors' colors count as taken). */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId), bots = mayorList();
+  if (!others.some(([id, p]) => p.c === myColor && id < net.sessionId) && !bots.some((b) => b.c === myColor)) return;
+  const taken = new Set([...others.map(([, p]) => p.c), ...bots.map((b) => b.c)]);
+  myColor = COLORS.find((c) => !taken.has(c)) || myColor; net.me.set("c", myColor);
+}
+// Cursors: a ring on the tile each builder points at, and a little drone above it.
+const cursorViews = new Map();
+const ringGeo = new THREE.RingGeometry(0.78, 1, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2);
+const tagTex = (name) => canvasTex(256, 64, (c) => { c.font = "bold 30px system-ui, sans-serif"; c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#000a"; c.strokeText(name, 128, 42); c.fillStyle = "#fff"; c.fillText(name, 128, 42); });
+function cursorView(id, color, name) {
+  let v = cursorViews.get(id);
+  if (v && v.color !== color) { scene.remove(v.g); v = null; }
+  if (!v) {
+    const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false });
+    const ring = new THREE.Mesh(ringGeo, m); ring.scale.setScalar(T * 0.72); ring.position.y = 0.12; g.add(ring);
+    const drone = new THREE.Group(); drone.position.y = 3.2; g.add(drone);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), mat(color, { roughness: 0.4 })); body.castShadow = true; drone.add(body);
+    const rotor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.12), mat("#2b3a55")); rotor.position.y = 0.36; drone.add(rotor);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.3, 3, 8, 1, true).translate(0, -1.5, 0), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, depthWrite: false })); drone.add(beam);
+    if (name && !ATTRACT) { const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex(name), depthTest: false })); tag.scale.set(3.6, 0.9, 1); tag.position.y = 1; drone.add(tag); }
+    scene.add(g); v = { g, ring, drone, rotor, color, x: 0, z: 0, fresh: true }; cursorViews.set(id, v);
+  }
+  return v;
+}
+function drawCursors(dt, t) {
+  const seen = new Set(), live = new Set(livePlayers());
+  const show = (id, color, name, x, z) => {
+    const v = cursorView(id, color, name); seen.add(id);
+    if (v.fresh) { v.x = x; v.z = z; v.fresh = false; }
+    const k = 1 - Math.pow(0.002, dt); v.x += (x - v.x) * k; v.z += (z - v.z) * k;
+    v.g.position.set(v.x, 0, v.z); v.drone.position.y = 3.2 + Math.sin(t * 2 + id.length) * 0.2; v.rotor.rotation.y += dt * 25;
+  };
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    if (id === net.sessionId || !live.has(id)) continue;
+    const c = parse(p.cur, null); if (c && Number.isInteger(c.x)) show(id, p.c || "#ccc", p.n || "Builder", cellX(c.x), cellZ(c.z));
+  }
+  for (const b of mayorList()) show(b.i, b.c, b.n, b.x, b.z);
+  for (const [id, v] of cursorViews) if (!seen.has(id)) { scene.remove(v.g); cursorViews.delete(id); }
+}
+// My own cursor: the tile I point at, green if the tool fits, red if not.
+const myRing = new THREE.Mesh(new THREE.BoxGeometry(T, 0.12, T), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.35, depthWrite: false }));
+myRing.visible = false; scene.add(myRing);
+function drawMyCursor() {
+  myRing.visible = !!me.cell && me.tool !== "look" && !ATTRACT;
+  if (!myRing.visible) return;
+  const [i, j] = me.cell, c = (view.g || [])[i + j * N], ok = !!result(me.tool, c);
+  myRing.position.set(cellX(i), 0.12, cellZ(j)); myRing.material.color.set(ok ? (me.tool === "bulldoze" ? "#ffb04a" : "#7dff9a") : "#ff6b6b");
+}
+/** The camera orbits a point on the map; ?attract circles the town slowly. */
+function placeCamera(dt, t) {
+  if (ATTRACT) { cam.yaw = 0.5 + t * 0.06; cam.dist = 29; cam.pitch = 0.8; cam.x = -2; cam.z = 0; }
+  const tall = camera.aspect < 0.8, d = cam.dist * (tall ? 1.5 : 1);
+  camera.position.set(cam.x + Math.sin(cam.yaw) * Math.cos(cam.pitch) * d, Math.sin(cam.pitch) * d, cam.z + Math.cos(cam.yaw) * Math.cos(cam.pitch) * d);
+  camera.lookAt(cam.x, 0, cam.z);
+}
+
+// ── HUD ─────────────────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const touchUI = matchMedia("(pointer: coarse)").matches;
+const milestone = (pop) => CONFIG.milestones.filter(([p]) => pop >= p).pop();
+const nextMilestone = (pop) => CONFIG.milestones.find(([p]) => pop < p);
+function toast(text) { const t = $("toast"); t.textContent = text; t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), 3200); }
+for (const tool of TOOLS) {
+  const b = document.createElement("button"); b.dataset.t = tool.id;
+  b.innerHTML = `<span>${tool.icon}</span>${tool.name}${CONFIG.cost[tool.id] ? `<small>$${CONFIG.cost[tool.id]}</small>` : ""}`;
+  b.onclick = () => pickTool(tool.id); $("tools").append(b);
+}
+function pickTool(id) { me.tool = id; for (const b of $("tools").children) b.classList.toggle("on", b.dataset.t === id); }
+let lastBest = -1, lastDay = -1;
+function hud(now) {
+  if (ATTRACT) return;
+  const n = livePlayers().length, st = stats();
+  $("net").textContent = reconnecting ? "Reconnecting…" : net.offline ? "Offline: playing with bots" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the town" : ""}`;
+  if (!st) { $("title").textContent = "Finding your town…"; return; }
+  const [, name] = milestone(st.p), next = nextMilestone(st.p);
+  $("title").innerHTML = `${name} <small>· Day ${st.d}</small>`;
+  $("stats").innerHTML = `<span>👤 ${st.p}</span><span>💼 ${st.j}</span><span class="m">$${st.m} <small>${st.inc >= 0 ? "+" : ""}${st.inc}/day</small></span>`;
+  const g = view.g;
+  if (g) { const { pop, jobs } = census(g), hw = clamp(0.5 + ((jobs + 25) / (pop * 0.45 + 25)) * 0.5, 0.3, 1.6), sw = clamp((pop * 0.45 + 15) / (jobs + 15) - 0.3, 0.1, 1.6); $("dH").style.width = (hw / 1.6) * 100 + "%"; $("dS").style.width = (sw / 1.6) * 100 + "%"; }
+  const since = now - startedAt;
+  $("hint").style.opacity = since < 16000 ? 1 : 0;
+  $("hint").textContent = since < 8000 ? (touchUI ? "Pick Road and drag on the map to build a street. Two fingers move the view." : "Pick Road and drag on the map to build a street. Right-drag moves, wheel zooms, Q/E turn.")
+    : `Zone Homes and Shops next to roads. ${next ? `${next[1]} at ${next[0]} people!` : ""}`;
+  // milestones: celebrate a new one as it happens (not on joining)
+  if (lastBest >= 0 && st.b > lastBest && milestone(st.b)[0] > milestone(lastBest)[0]) showMilestone(st.b);
+  if (lastBest >= 0 && player && st.b > lastBest && now - (hud.submitted || 0) > 20000) { hud.submitted = now; player.leaderboard(CONFIG.board).submit(st.b).catch(() => {}); }
+  lastBest = Math.max(lastBest, st.b);
+  if (lastDay >= 0 && st.d > lastDay && st.inc) sfx(st.inc > 0 ? 880 : 220, 0.12, "triangle");
+  lastDay = st.d;
+}
+function showMilestone(pop) {
+  const [, name] = milestone(pop), next = nextMilestone(pop);
+  $("mileTitle").textContent = `Your town is now a ${name}!`; $("milePop").textContent = `👤 ${pop}`;
+  $("mileSub").textContent = next ? `Next: ${next[1]} at ${next[0]} people.` : "The biggest there is. Well done, mayors!";
+  $("mile").hidden = false; loadBoard($("board"), pop);
+  for (let k = 0; k < 40; k++) burst(cam.x + rnd(-8, 8), 6, cam.z + rnd(-8, 8), 1, pick(COLORS), 3, 6);
+  sfx(660, 0.15, "triangle"); setTimeout(() => sfx(880, 0.2, "triangle"), 140);
+}
+function loadBoard(list, pop) {
+  if (!player) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  const board = player.leaderboard(CONFIG.board);
+  (pop ? board.submit(pop).catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Mayor")}<span>👤 ${e.score}</span></li>`).join("") : "<li>No towns yet. Grow the first!</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+function openStats() {
+  const st = stats() || {}, g = view.g || [], { roads, parks } = census(g);
+  let homes = 0, shops = 0; for (const c of g) { if (lvl(c) > 0) { if (HOME.includes(c)) homes++; else shops++; } }
+  $("spTitle").textContent = `${milestone(st.p || 0)[1]} · Day ${st.d || 1}`;
+  $("spTable").innerHTML = [["People", st.p], ["Jobs", st.j], ["Money", "$" + st.m], ["Income per day", (st.inc >= 0 ? "+$" : "-$") + Math.abs(st.inc || 0)], ["Homes built", homes], ["Shops built", shops], ["Roads", roads], ["Parks", parks], ["Biggest it has been", st.b]]
+    .map(([a, b]) => `<tr><td>${a}</td><td>${b ?? 0}</td></tr>`).join("");
+  $("statsPanel").hidden = false; loadBoard($("board2"), st.b || 0);
+}
+let audio = null;
+const wakeAudio = () => { if (!audio) try { audio = new AudioContext(); } catch {} else if (audio.state === "suspended") audio.resume(); };
+function sfx(freq, dur, type = "square", vol = 0.035) {
+  if (!audio || ATTRACT) return;
+  try {
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime;
+    o.type = type; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
+  } catch {}
+}
+
+// ── INPUT ───────────────────────────────────────────────────────────────────────────
+const cv = renderer.domElement, ray = new THREE.Raycaster(), groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3();
+/** The tile under a screen point, through the camera that drew the frame. */
+function cellAt(x, y) {
+  ray.setFromCamera({ x: (x / innerWidth) * 2 - 1, y: -(y / innerHeight) * 2 + 1 }, camera);
+  if (!ray.ray.intersectPlane(groundPlane, hitP)) return null;
+  const i = Math.floor((hitP.x + HALF) / T), j = Math.floor((hitP.z + HALF) / T);
+  return inMap(i, j) ? [i, j] : null;
+}
+const pointers = new Map(); // id -> { x, y }
+let gesture = null; // { kind: "pan" | "pinch", ... }
+function panBy(dx, dy) {
+  const k = (cam.dist * 1.4) / innerHeight, s = Math.sin(cam.yaw), c = Math.cos(cam.yaw);
+  cam.x = clamp(cam.x - (dx * c + dy * s) * k, -HALF, HALF); cam.z = clamp(cam.z - (-dx * s + dy * c) * k, -HALF, HALF);
+}
+cv.addEventListener("contextmenu", (e) => e.preventDefault());
+cv.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); wakeAudio(); try { cv.setPointerCapture(e.pointerId); } catch {}
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) { if (me.stroke && me.stroke.start) me.stroke = null; endStroke(); const [a, b] = [...pointers.values()]; gesture = { kind: "pinch", d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; return; }
+  if (e.button === 2 || e.button === 1 || me.tool === "look") { gesture = { kind: "pan" }; return; }
+  if (!$("mile").hidden || !$("statsPanel").hidden) return;
+  me.stroke = { tool: me.tool, done: new Set(), last: null, spent: 0, start: cellAt(e.clientX, e.clientY), wait: e.pointerType === "touch" ? performance.now() + 110 : 0 };
+  startStroke(performance.now());
+});
+/** A touch waits a moment before it paints, so a second finger can still make it a pinch. */
+function startStroke(now) { const s = me.stroke; if (s && s.start && now >= s.wait) { const c = s.start; s.start = null; paintTo(c); } }
+cv.addEventListener("pointermove", (e) => {
+  const p = pointers.get(e.pointerId);
+  me.cell = cellAt(e.clientX, e.clientY);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (gesture?.kind === "pinch" && pointers.size === 2) {
+    const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    cam.dist = clamp(cam.dist * (gesture.d / Math.max(20, d)), 14, 70); panBy(mx - gesture.mx, my - gesture.my); Object.assign(gesture, { d, mx, my });
+  } else if (gesture?.kind === "pan") panBy(dx, dy);
+  else if (me.stroke) { startStroke(performance.now()); if (!me.stroke.start) paintTo(me.cell); }
+});
+function endStroke() { if (me.stroke) { if (me.stroke.start) { me.stroke.wait = 0; startStroke(performance.now()); } flush(performance.now(), true); me.stroke = null; } } // a quick tap still paints
+for (const ev of ["pointerup", "pointercancel"]) cv.addEventListener(ev, (e) => { pointers.delete(e.pointerId); if (!pointers.size) gesture = null; endStroke(); });
+cv.addEventListener("wheel", (e) => { cam.dist = clamp(cam.dist * (1 + e.deltaY * 0.001), 14, 70); }, { passive: true });
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (k === "q") cam.yaw -= Math.PI / 8; if (k === "e") cam.yaw += Math.PI / 8;
+  const n = Number(e.key); if (n >= 1 && n <= TOOLS.length) pickTool(TOOLS[n - 1].id);
+  if (k === "escape") { $("mile").hidden = $("statsPanel").hidden = true; }
+});
+const held = new Set();
+addEventListener("keydown", (e) => held.add(e.key.toLowerCase())); addEventListener("keyup", (e) => held.delete(e.key.toLowerCase())); addEventListener("blur", () => held.clear());
+function keyPan(dt) {
+  const f = (held.has("w") || held.has("arrowup") ? 1 : 0) - (held.has("s") || held.has("arrowdown") ? 1 : 0), r = (held.has("d") || held.has("arrowright") ? 1 : 0) - (held.has("a") || held.has("arrowleft") ? 1 : 0);
+  if (f || r) panBy(-r * 500 * dt, f * 500 * dt);
+}
+$("rotL").onclick = () => { cam.yaw -= Math.PI / 4; }; $("rotR").onclick = () => { cam.yaw += Math.PI / 4; };
+$("statsBtn").onclick = openStats; $("spGo").onclick = () => { $("statsPanel").hidden = true; }; $("mileGo").onclick = () => { $("mile").hidden = true; };
+document.addEventListener("touchmove", (e) => { if (e.target === cv) e.preventDefault(); }, { passive: false });
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+let last = performance.now(), lastHb = 0, lastHud = 0;
+function frame(now) {
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)), t = now / 1000; last = now;
+  if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
+  if (isHost()) hostTick(dt, now); else world.adopted = false;
+  startStroke(now); flush(now, false); publishCursor(now); keyPan(dt);
+  syncTiles(now);
+  if (view.animating) rebuildTiles(now);
+  lifeTick(dt, t); partsTick(dt); drawCursors(dt, t); drawMyCursor();
+  gridLines.visible = me.tool !== "look" && !ATTRACT;
+  placeCamera(dt, t);
+  sun.position.set(cam.x + 30, 50, cam.z + 20); sun.target.position.set(cam.x, 0, cam.z); sun.target.updateMatrixWorld();
+  renderer.render(scene, camera);
+  if (now - lastHud > 200) { lastHud = now; hud(now); }
+  requestAnimationFrame(frame);
+}
+
+(async function start() {
+  document.body.classList.toggle("attract", ATTRACT);
+  net = await connect();
+  net.onState((st) => { S = st; });
+  net.on("build", (m, from) => { if (isHost()) applyBuild(from, m, true); });
+  net.on("memory", (m) => { if (m && typeof m.text === "string") toast(m.text.slice(0, 80)); });
+  net.onDisconnect(() => { reconnecting = true; $("net").textContent = "Reconnecting…"; });
+  net.onReconnect(() => { reconnecting = false; });
+  net.onLive((live) => { $("event").textContent = (live && live.active || []).map((e) => e.title).join(" · "); });
+  if (!net.offline && typeof MP !== "undefined") player = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl });
+  const taken = new Set([...Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c), ...shared("bots", []).map((b) => b.c)]);
+  myColor = COLORS.find((c) => !taken.has(c)) || pick(COLORS);
+  net.me.set({ n: myName, c: myColor, hb: Date.now() });
+  pickTool("road");
+  startedAt = performance.now();
+  if (ATTRACT) memory.ready = true; else loadMemory();
+  setInterval(memoryTick, 1000);
+  if (TEST) window.__test = { world, me, cam, S: () => S, cityGrid, stats, isHost, mayorList, census, applyBuild, PLAN, cellX, cellZ, pending, memory,
+    project: (i, j) => { const v = new THREE.Vector3(cellX(i), 0, cellZ(j)).project(camera); return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight]; } };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

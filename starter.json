@@ -1,0 +1,22 @@
+{
+  "name": "City Together",
+  "genre": "sim",
+  "dim": "3D",
+  "mode": "Co-op",
+  "players": "1–8",
+  "hook": "Build a little town together. Watch it grow.",
+  "how": "Lay roads, then zone homes, shops and parks next to them. Homes fill with people, shops bring jobs, and taxes pay for more. Grow from a hamlet to a city, and the town is still there the next time anyone comes back.",
+  "controls": "Pick a tool and click or drag on the map to build; drag with the hand (or right mouse) to move, wheel or pinch to zoom, Q/E to turn",
+  "uses": [
+    ["World memory", "The town is remembered by the players who built it: whoever comes back first brings it back for everyone."],
+    ["Host-run rules", "The host's browser checks every build, grows the town and keeps the shared money; if it leaves, the next player takes over."],
+    ["Bots", "AI mayors lay streets and zone lots until enough people join."],
+    ["Leaderboard", "The biggest town each player has helped build."],
+    ["Live ops", "Speed up growth or raise taxes for an event without touching the code."]
+  ],
+  "ideas": [
+    "Add a day and night cycle with street lights",
+    "Add factories that make jobs but scare away homes",
+    "Add a mayor's goal each week with a reward"
+  ]
+}
