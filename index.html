@@ -901,6 +901,7 @@ document.addEventListener("touchmove", (e) => { if (e.target === cv) e.preventDe
 // ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
 let last = performance.now(), lastHb = 0, lastHud = 0;
 function frame(now) {
+  requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)), t = now / 1000; last = now;
   if (now - lastHb > 1000) { lastHb = now; net.me.set("hb", Date.now()); fixColor(); }
   if (isHost()) hostTick(dt, now); else world.adopted = false;
@@ -913,7 +914,6 @@ function frame(now) {
   sun.position.set(cam.x + 30, 50, cam.z + 20); sun.target.position.set(cam.x, 0, cam.z); sun.target.updateMatrixWorld();
   renderer.render(scene, camera);
   if (now - lastHud > 200) { lastHud = now; hud(now); }
-  requestAnimationFrame(frame);
 }
 
 (async function start() {
