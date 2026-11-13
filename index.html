@@ -38,6 +38,7 @@
   .card .big { font-size: 34px; font-weight: 900; margin: 4px 0; }
   .card p { margin: 6px 0; font-size: 14px; color: #5a6478; }
   .card ol { margin: 0; padding-left: 26px; text-align: left; font-size: 14px; } .card li span { float: right; font-variant-numeric: tabular-nums; }
+  .card li.note { list-style: none; margin-left: -26px; color: #5a6478; } /* a status line, not a numbered entry */
   .card table { width: 100%; font-size: 14px; border-collapse: collapse; text-align: left; } .card td { padding: 3px 0; } .card td:last-child { text-align: right; font-weight: 800; }
   button.go { width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 14px; background: #3ccf6e; color: #06240f; font: 900 17px system-ui, sans-serif; cursor: pointer; }
   [hidden] { display: none !important; }
@@ -61,13 +62,13 @@
 <div id="tools"></div>
 <div class="panel" id="mile" hidden><div class="card">
   <h2 id="mileTitle"></h2><div class="big" id="milePop"></div><p id="mileSub"></p>
-  <h3>Biggest towns</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Biggest towns</h3><ol id="board"><li class="note">Loading…</li></ol>
   <button class="go" id="mileGo">Keep building</button>
 </div></div>
 <div class="panel" id="statsPanel" hidden><div class="card">
   <h2 id="spTitle"></h2>
   <table id="spTable"></table>
-  <h3>Biggest towns</h3><ol id="board2"><li>Loading…</li></ol>
+  <h3>Biggest towns</h3><ol id="board2"><li class="note">Loading…</li></ol>
   <button class="go" id="spGo">Back to building</button>
 </div></div>
 <script type="module">
@@ -816,11 +817,11 @@ function showMilestone(pop) {
   sfx(660, 0.15, "triangle"); setTimeout(() => sfx(880, 0.2, "triangle"), 140);
 }
 function loadBoard(list, pop) {
-  if (!player) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  if (!player) { list.innerHTML = `<li class="note">Leaderboards need a connection.</li>`; return; }
   const board = player.leaderboard(CONFIG.board);
   (pop ? board.submit(pop).catch(() => null) : Promise.resolve()).then(() => board.top(10)).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Mayor")}<span>👤 ${e.score}</span></li>`).join("") : "<li>No towns yet. Grow the first!</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Mayor")}<span>👤 ${e.score}</span></li>`).join("") : `<li class="note">No towns yet. Grow the first!</li>`;
+  }).catch(() => { list.innerHTML = `<li class="note">Couldn't load the leaderboard.</li>`; });
 }
 function openStats() {
   const st = stats() || {}, g = view.g || [], { roads, parks } = census(g);
@@ -890,7 +891,7 @@ addEventListener("keydown", (e) => {
   if (k === "escape") { $("mile").hidden = $("statsPanel").hidden = true; }
 });
 const held = new Set();
-addEventListener("keydown", (e) => held.add(e.key.toLowerCase())); addEventListener("keyup", (e) => held.delete(e.key.toLowerCase())); addEventListener("blur", () => held.clear());
+addEventListener("keydown", (e) => held.add(e.key.toLowerCase())); addEventListener("keyup", (e) => held.delete(e.key.toLowerCase())); addEventListener("blur", () => { held.clear(); pointers.clear(); gesture = null; endStroke(); }); // switching away mid-drag: no stuck pan or stroke
 function keyPan(dt) {
   const f = (held.has("w") || held.has("arrowup") ? 1 : 0) - (held.has("s") || held.has("arrowdown") ? 1 : 0), r = (held.has("d") || held.has("arrowright") ? 1 : 0) - (held.has("a") || held.has("arrowleft") ? 1 : 0);
   if (f || r) panBy(-r * 500 * dt, f * 500 * dt);
